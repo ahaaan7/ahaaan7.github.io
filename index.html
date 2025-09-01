@@ -5,8 +5,30 @@
 <title>マルチ透かし画像加工サイト</title>
 <style>
   body { font-family: sans-serif; text-align: center; margin: 40px; }
-  canvas { display: block; margin: 20px auto; border: 1px solid #ccc; touch-action: none; cursor: grab; }
-  button { margin-top: 10px; padding: 8px 16px; }
+  h1 { font-size: 24px; margin-bottom: 20px; }
+  canvas { display: block; margin: 20px auto; border: 1px solid #ccc; touch-action: none; cursor: grab; max-width: 100%; height: auto; }
+
+  input[type="file"], input[type="range"], button {
+    margin-top: 10px;
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  /* スマホ用 */
+  @media (max-width: 600px) {
+    body { margin: 10px; }
+    h1 { font-size: 20px; }
+    input[type="file"], input[type="range"], button {
+      width: 90%;
+      font-size: 16px;
+      padding: 12px;
+    }
+  }
+
+  /* PC用 */
+  @media (min-width: 601px) {
+    canvas { max-width: 800px; height: auto; }
+  }
 </style>
 </head>
 <body>
@@ -19,6 +41,7 @@
 <button id="downloadBtn" style="display:none;">加工後の画像を保存</button>
 
 <script>
+// ======= 基本設定 =======
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const fileInput = document.getElementById("fileInput");
@@ -29,21 +52,15 @@ const opacityRange = document.getElementById("opacityRange");
 let originalImage = null;
 let watermarks = []; // 複数透かし用
 
-let isDragging = false;
-let dragIndex = -1;
-let lastX = 0, lastY = 0;
-
-let isRotating = false;
-let rotateIndex = -1;
-let rotateStartX = 0;
-
+let isDragging = false, dragIndex = -1, lastX = 0, lastY = 0;
+let isRotating = false, rotateIndex = -1, rotateStartX = 0;
 let watermarkOpacity = parseFloat(opacityRange.value);
 
-// ---------------------- 描画関数 ----------------------
+// ======= 描画 =======
 function drawCanvas() {
   if (!originalImage) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(originalImage, 0, 0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(originalImage,0,0);
   watermarks.forEach(wm => {
     const w = wm.img.width * wm.scale;
     const h = wm.img.height * wm.scale;
@@ -56,7 +73,7 @@ function drawCanvas() {
   });
 }
 
-// ---------------------- 画像読み込み ----------------------
+// ======= 画像読み込み =======
 fileInput.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -72,17 +89,10 @@ fileInput.addEventListener("change", e => {
 });
 
 watermarkInput.addEventListener("change", e => {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
+  Array.from(e.target.files).forEach(file => {
     const img = new Image();
     img.onload = () => {
-      watermarks.push({
-        img: img,
-        x: 50, y: 50,
-        scale: 0.2,
-        rotation: 0,
-        opacity: watermarkOpacity
-      });
+      watermarks.push({ img, x:50, y:50, scale:0.2, rotation:0, opacity: watermarkOpacity });
       drawCanvas();
     };
     img.src = URL.createObjectURL(file);
@@ -95,143 +105,105 @@ opacityRange.addEventListener("input", () => {
   drawCanvas();
 });
 
-// ---------------------- PC操作 ----------------------
-// 透かし上にカーソルがあるか判定
-function getWatermarkAt(x, y) {
-  for (let i = watermarks.length - 1; i >= 0; i--) {
+// ======= PC操作 =======
+function getWatermarkAt(x,y){
+  for(let i=watermarks.length-1;i>=0;i--){
     const wm = watermarks[i];
-    const w = wm.img.width * wm.scale;
-    const h = wm.img.height * wm.scale;
-    const cx = wm.x + w/2, cy = wm.y + h/2;
-    const dx = x - cx, dy = y - cy;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist < Math.max(w,h)/2) return i;
+    const w = wm.img.width*wm.scale;
+    const h = wm.img.height*wm.scale;
+    const cx = wm.x+w/2, cy=wm.y+h/2;
+    const dx = x-cx, dy=y-cy;
+    if(Math.sqrt(dx*dx+dy*dy)<Math.max(w,h)/2) return i;
   }
   return -1;
 }
 
-canvas.addEventListener("mousedown", e => {
+canvas.addEventListener("mousedown", e=>{
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  if (e.button === 0) { // 左クリックドラッグ
+  if(e.button===0){
     dragIndex = getWatermarkAt(x,y);
-    if (dragIndex >=0) {
-      isDragging = true;
-      lastX = x;
-      lastY = y;
-    }
-  } else if (e.button === 2) { // 右クリック＋ドラッグ回転
+    if(dragIndex>=0){ isDragging=true; lastX=x; lastY=y; }
+  } else if(e.button===2){
     rotateIndex = getWatermarkAt(x,y);
-    if (rotateIndex >=0) {
-      isRotating = true;
-      rotateStartX = x;
-    }
+    if(rotateIndex>=0){ isRotating=true; rotateStartX=x; }
   }
 });
 
-canvas.addEventListener("mousemove", e => {
+canvas.addEventListener("mousemove", e=>{
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  if (isDragging && dragIndex>=0) {
+  if(isDragging && dragIndex>=0){
     const wm = watermarks[dragIndex];
-    wm.x += x - lastX;
-    wm.y += y - lastY;
-    lastX = x; lastY = y;
-    drawCanvas();
-  } else if (isRotating && rotateIndex>=0) {
-    const dx = x - rotateStartX;
-    watermarks[rotateIndex].rotation += dx*0.5;
+    wm.x += x-lastX; wm.y += y-lastY;
+    lastX=x; lastY=y; drawCanvas();
+  } else if(isRotating && rotateIndex>=0){
+    watermarks[rotateIndex].rotation += (x-rotateStartX)*0.5;
     rotateStartX = x;
     drawCanvas();
   }
 });
 
-canvas.addEventListener("mouseup", e => { 
-  if (e.button === 0) isDragging = false;
-  if (e.button === 2) isRotating = false;
-  dragIndex = -1; rotateIndex = -1;
-});
-
-canvas.addEventListener("mouseleave", () => { 
-  isDragging = false; isRotating = false;
-  dragIndex = -1; rotateIndex = -1;
-});
-
-canvas.addEventListener("wheel", e => {
+canvas.addEventListener("mouseup", e=>{ if(e.button===0)isDragging=false; if(e.button===2)isRotating=false; dragIndex=-1; rotateIndex=-1; });
+canvas.addEventListener("mouseleave", ()=>{ isDragging=false; isRotating=false; dragIndex=-1; rotateIndex=-1; });
+canvas.addEventListener("wheel", e=>{
   e.preventDefault();
-  const idx = getWatermarkAt(e.offsetX, e.offsetY);
-  if (idx>=0) {
-    watermarks[idx].scale *= e.deltaY<0?1.1:0.9;
-    drawCanvas();
-  }
+  const idx = getWatermarkAt(e.offsetX,e.offsetY);
+  if(idx>=0){ watermarks[idx].scale *= e.deltaY<0?1.1:0.9; drawCanvas(); }
 });
+canvas.addEventListener("contextmenu", e=>e.preventDefault());
 
-// 右クリックメニュー無効
-canvas.addEventListener("contextmenu", e => e.preventDefault());
-
-// ---------------------- タッチ操作 ----------------------
+// ======= タッチ操作 =======
 let touchData = {};
-
-canvas.addEventListener("touchstart", e => {
+canvas.addEventListener("touchstart", e=>{
   e.preventDefault();
   for(let i=0;i<e.touches.length;i++){
-    const t = e.touches[i];
-    const x = t.clientX - canvas.getBoundingClientRect().left;
-    const y = t.clientY - canvas.getBoundingClientRect().top;
+    const t=e.touches[i];
+    const x=t.clientX-canvas.getBoundingClientRect().left;
+    const y=t.clientY-canvas.getBoundingClientRect().top;
     const idx = getWatermarkAt(x,y);
-    if(idx>=0){
-      touchData[t.identifier] = { index: idx, startX: x, startY: y, startDist: null, startAngle: null };
-    }
+    if(idx>=0) touchData[t.identifier]={index:idx,startX:x,startY:y,startDist:null,startAngle:null};
   }
 });
 
-canvas.addEventListener("touchmove", e => {
+canvas.addEventListener("touchmove", e=>{
   e.preventDefault();
   if(e.touches.length===1){
-    const t = e.touches[0];
-    const data = touchData[t.identifier];
+    const t=e.touches[0], data=touchData[t.identifier];
     if(data){
-      const dx = t.clientX - canvas.getBoundingClientRect().left - data.startX;
-      const dy = t.clientY - canvas.getBoundingClientRect().top - data.startY;
+      const dx = t.clientX-canvas.getBoundingClientRect().left-data.startX;
+      const dy = t.clientY-canvas.getBoundingClientRect().top-data.startY;
       const wm = watermarks[data.index];
-      wm.x += dx;
-      wm.y += dy;
-      data.startX += dx;
-      data.startY += dy;
+      wm.x += dx; wm.y += dy;
+      data.startX+=dx; data.startY+=dy;
       drawCanvas();
     }
   } else if(e.touches.length===2){
-    const t1 = e.touches[0], t2 = e.touches[1];
-    const d1 = touchData[t1.identifier], d2 = touchData[t2.identifier];
+    const t1=e.touches[0], t2=e.touches[1];
+    const d1=touchData[t1.identifier], d2=touchData[t2.identifier];
     if(d1 && d2){
-      const wm = watermarks[d1.index]; // 同じ透かしを操作
-      const dx = t2.clientX - t1.clientX, dy = t2.clientY - t1.clientY;
-      const dist = Math.sqrt(dx*dx+dy*dy);
-      const angle = Math.atan2(dy,dx)*180/Math.PI;
-      if(d1.startDist) {
-        wm.scale *= dist/d1.startDist;
-        wm.rotation += angle - d1.startAngle;
-      }
-      d1.startDist = dist;
-      d1.startAngle = angle;
+      const wm = watermarks[d1.index];
+      const dx=t2.clientX-t1.clientX, dy=t2.clientY-t1.clientY;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      const angle=Math.atan2(dy,dx)*180/Math.PI;
+      if(d1.startDist){ wm.scale *= dist/d1.startDist; wm.rotation += angle-d1.startAngle; }
+      d1.startDist = dist; d1.startAngle = angle;
       drawCanvas();
     }
   }
 });
 
-canvas.addEventListener("touchend", e => {
+canvas.addEventListener("touchend", e=>{
   e.preventDefault();
-  for(let i=0;i<e.changedTouches.length;i++){
-    delete touchData[e.changedTouches[i].identifier];
-  }
+  for(let i=0;i<e.changedTouches.length;i++){ delete touchData[e.changedTouches[i].identifier]; }
 });
 
-// ---------------------- 保存 ----------------------
-downloadBtn.addEventListener("click", () => {
+// ======= 保存 =======
+downloadBtn.addEventListener("click", ()=>{
   const link = document.createElement("a");
-  link.download = "watermarked.png";
+  link.download="watermarked.png";
   link.href = canvas.toDataURL();
   link.click();
 });
