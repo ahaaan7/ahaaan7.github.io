@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>画像加工サイト(タッチ対応透かし)</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin: 40px; }
+    canvas { display: block; margin: 20px auto; border: 1px solid #ccc; touch-action: none; }
+    button { margin-top: 10px; padding: 8px 16px; }
+  </style>
+</head>
+<body>
+  <h1>画像加工サイト (タッチ対応透かし)</h1>
+  <input type="file" id="fileInput" accept="image/*">
+  <br>
+  <input type="file" id="watermarkInput" accept="image/*">
+  <br>
+  <label>透かし透明度: <input type="range" id="opacityRange" min="0" max="1" step="0.01" value="0.5"></label>
+  <br>
+  <canvas id="canvas"></canvas>
+  <button id="downloadBtn" style="display:none;">加工後の画像を保存</button>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const fileInput = document.getElementById("fileInput");
+    const watermarkInput = document.getElementById("watermarkInput");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const opacityRange = document.getElementById("opacityRange");
+
+    let originalImage = null;
+    let watermarkImage = null;
+
+    let watermarkX = 50;
+    let watermarkY = 50;
+    let watermarkScale = 0.2;
+    let watermarkRotation = 0;
+    let watermarkOpacity = parseFloat(opacityRange.value);
+
+    // タッチ操作用
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let lastDistance = 0;
+    let lastAngle = 0;
+
+    function drawCanvas() {
+      if (!originalImage) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(originalImage, 0, 0);
+      if (watermarkImage) {
+        const w = watermarkImage.width * watermarkScale;
+        const h = watermarkImage.height * watermarkScale;
+        ctx.save();
+        ctx.globalAlpha = watermarkOpacity;
+        ctx.translate(watermarkX + w/2, watermarkY + h/2);
+        ctx.rotate(watermarkRotation * Math.PI / 180);
+        ctx.drawImage(watermarkImage, -w/2, -h/2, w, h);
+        ctx.restore();
+      }
+    }
+
+    fileInput.addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        originalImage = img;
+        canvas.width = img.width;
+        canvas.height = img.height;
+        drawCanvas();
+        downloadBtn.style.display = "inline-block";
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    watermarkInput.addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        watermarkImage = img;
+        drawCanvas();
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    opacityRange.addEventListener("input", () => {
+      watermarkOpacity = parseFloat(opacityRange.value);
+      drawCanvas();
+    });
+
+    // タッチ操作
+    canvas.addEventListener("touchstart", e => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      if (e.touches.length === 1) {
+        isDragging = true;
+        lastX = e.touches[0].clientX - rect.left;
+        lastY = e.touches[0].clientY - rect.top;
+      } else if (e.touches.length === 2) {
+        lastDistance = getDistance(e.touches);
+        lastAngle = getAngle(e.touches);
+      }
+    });
+
+    canvas.addEventListener("touchmove", e => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      if (e.touches.length === 1 && isDragging) {
+        const x = e.touches[0].clientX - rect.left;
+        const y = e.touches[0].clientY - rect.top;
+        watermarkX += x - lastX;
+        watermarkY += y - lastY;
+        lastX = x;
+        lastY = y;
+      } else if (e.touches.length === 2) {
+        const newDistance = getDistance(e.touches);
+        const newAngle = getAngle(e.touches);
+
+        // 拡大縮小
+        watermarkScale *= newDistance / lastDistance;
+        lastDistance = newDistance;
+
+        // 回転
+        watermarkRotation += (newAngle - lastAngle);
+        lastAngle = newAngle;
+      }
+      drawCanvas();
+    });
+
+    canvas.addEventListener("touchend", e => {
+      e.preventDefault();
+      if (e.touches.length === 0) {
+        isDragging = false;
+      }
+    });
+
+    function getDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    function getAngle(touches) {
+      const dx = touches[1].clientX - touches[0].clientX;
+      const dy = touches[1].clientY - touches[0].clientY;
+      return Math.atan2(dy, dx) * 180 / Math.PI;
+    }
+
+    downloadBtn.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = "watermarked.png";
+      link.href = canvas.toDataURL();
+      link.click();
+    });
+  </script>
+</body>
+</html>
